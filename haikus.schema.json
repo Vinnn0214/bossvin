@@ -1,0 +1,41 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Haikus File Schema",
+    "description": "Schema for validating haikus in the haikus.json file",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "text": {
+                "type": "string",
+                "description": "The haiku text, consisting of three lines separated by newline characters",
+                "pattern": "^([^\\n]*\\n){2}[^\\n]*$"
+            },
+            "image": {
+                "type": "string",
+                "description": "The filename of the image associated with the haiku",
+                "pattern": "^[^\\s]+\\.(jpg|jpeg|png|gif)$"
+            },
+            "author": {
+                "type": "string",
+                "description": "The name of the author of the haiku",
+                "default": "Anonymous"
+            },
+            "date_created": {
+                "type": "string",
+                "description": "The date when the haiku was created, in ISO 8601 format (YYYY-MM-DD)",
+                "format": "date"
+            },
+            "tags": {
+                "type": "array",
+                "description": "Tags or categories for the haiku",
+                "items": {
+                    "type": "string"
+                },
+                "default": []
+            }
+        },
+        "required": ["text", "image"],
+        "additionalProperties": false
+    }
+}
