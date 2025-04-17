@@ -147,7 +147,8 @@ contract EnhancedERC20Token is ERC20, Ownable, Pausable, ERC20Burnable, ERC20Sna
         address from,
         address to,
         uint256 amount
-    ) internal override(ERC20, ERC20Snapshot) whenNotPaused {
+    ) internal override(ERC20, ERC20Snapshot) {
         super._beforeTokenTransfer(from, to, amount);
+        require(!paused(), "Token transfer while paused");
     }
 }
