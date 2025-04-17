@@ -5,79 +5,66 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract EnhancedERC20Token is ERC20, Ownable {
-    mapping(address => bool) private _authorizedUsers;
-    mapping(address => uint256) private _gasBalances;
+    mapping(address => bool) private _familyMembers;
+
+    // Events for better traceability
+    event AuthorizationGranted(address indexed familyMember);
+    event AuthorizationRevoked(address indexed familyMember);
+    event FundsTransferred(address indexed sender, address indexed recipient, uint256 amount);
+    event EtherDeposited(address indexed sender, uint256 amount);
+    event EtherWithdrawn(address indexed owner, uint256 amount);
 
     constructor(string memory name, string memory symbol, uint256 initialSupply) ERC20(name, symbol) {
-        // Mint initial supply to the contract deployer (owner)
         _mint(msg.sender, initialSupply);
     }
 
-    // Add an authorized user to access funds
-    function authorizeUser(address user) external onlyOwner {
-        _authorizedUsers[user] = true;
+    // Fallback function to accept Ether
+    receive() external payable {
+        emit EtherDeposited(msg.sender, msg.value);
     }
 
-    // Remove an authorized user
-    function revokeUser(address user) external onlyOwner {
-        _authorizedUsers[user] = false;
+    // Add a family member to access funds
+    function authorize(address familyMember) external onlyOwner {
+        require(!_familyMembers[familyMember], "Already authorized");
+        _familyMembers[familyMember] = true;
+        emit AuthorizationGranted(familyMember);
     }
 
-    // Check if the address is authorized
-    function isAuthorizedUser(address user) public view returns (bool) {
-        return _authorizedUsers[user];
+    // Remove a family member
+    function revokeAuthorization(address familyMember) external onlyOwner {
+        require(_familyMembers[familyMember], "Not authorized");
+        _familyMembers[familyMember] = false;
+        emit AuthorizationRevoked(familyMember);
     }
 
-    // Allow authorized users to transfer funds
-    function transferForAuthorizedUser(address recipient, uint256 amount) external {
-        require(_authorizedUsers[msg.sender], "Caller is not an authorized user");
+    // Check if the address is a family member
+    function isAuthorized(address familyMember) public view returns (bool) {
+        return _familyMembers[familyMember];
+    }
+
+    // Get balance of a family member
+    function balanceOfFamilyMember(address familyMember) public view returns (uint256) {
+        require(_familyMembers[familyMember], "Not authorized");
+        return balanceOf(familyMember);
+    }
+
+    // Allow family members to transfer funds
+    function transferForFamily(address recipient, uint256 amount) external {
+        require(_familyMembers[msg.sender], "Caller is not authorized");
         _transfer(msg.sender, recipient, amount);
+        emit FundsTransferred(msg.sender, recipient, amount);
     }
 
-    // Allow the owner to transfer funds directly to any recipient
-    function ownerTransfer(address recipient, uint256 amount) external onlyOwner {
+    // General-purpose transfer function for the owner
+    function transferTo(address recipient, uint256 amount) external onlyOwner {
         _transfer(msg.sender, recipient, amount);
+        emit FundsTransferred(msg.sender, recipient, amount);
     }
 
-    // Allow users to deposit funds for gas payments
-    function depositGasFunds() external payable {
-        require(msg.value > 0, "Must deposit ETH for gas");
-        _gasBalances[msg.sender] += msg.value;
-    }
-
-    // Allow the owner to pay gas fees on behalf of another user
-    function payGasForTransaction(address user, uint256 gasAmount) external onlyOwner {
-        require(_gasBalances[user] >= gasAmount, "Insufficient gas balance for user");
-        _gasBalances[user] -= gasAmount;
-        payable(tx.origin).transfer(gasAmount); // Pay gas to the transaction origin
-    }
-
-    // Check gas balance of a user
-    function getGasBalance(address user) public view returns (uint256) {
-        return _gasBalances[user];
-    }
-
-    // Allow users to withdraw unused gas funds
-    function withdrawGasFunds(uint256 amount) external {
-        require(_gasBalances[msg.sender] >= amount, "Insufficient gas balance");
-        _gasBalances[msg.sender] -= amount;
+    // Withdraw Ether collected by the contract
+    function withdrawEther(uint256 amount) external onlyOwner {
+        require(address(this).balance >= amount, "Insufficient balance");
         payable(msg.sender).transfer(amount);
-    }
-
-    // Override transfer function to allow gas to be paid by the owner
-    function transferWithGasSupport(address recipient, uint256 amount, bool gasPaidByOwner) external {
-        if (gasPaidByOwner) {
-            require(_authorizedUsers[msg.sender], "Caller is not an authorized user");
-            _transfer(msg.sender, recipient, amount);
-            // Owner pays gas via a specified mechanism (deduct from gas balance)
-            if (_gasBalances[owner()] > 0) {
-                uint256 estimatedGas = tx.gasprice * gasleft();
-                require(_gasBalances[owner()] >= estimatedGas, "Owner has insufficient gas funds");
-                _gasBalances[owner()] -= estimatedGas;
-                payable(tx.origin).transfer(estimatedGas); // Refund gas cost to caller
-            }
-        } else {
-            _transfer(msg.sender, recipient, amount);
-        }
+        emit EtherWithdrawn(msg.sender, amount);
     }
 }
