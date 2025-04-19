@@ -1,144 +1,95 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Snapshot.sol";
+// OpenZeppelin imports (via raw GitHub links)
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/master/contracts/token/ERC20/ERC20.sol";
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/master/contracts/access/Ownable.sol";
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/master/contracts/security/Pausable.sol";
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/master/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/master/contracts/token/ERC20/extensions/ERC20Snapshot.sol";
 
 contract EthDevToken is ERC20, Ownable, Pausable, ERC20Burnable, ERC20Snapshot {
     mapping(address => bool) private _familyMembers;
     mapping(address => bool) private _whitelist;
 
-    event AuthorizationGranted(address indexed familyMember);
-    event AuthorizationRevoked(address indexed familyMember);
-    event FundsTransferred(address indexed sender, address indexed recipient, uint256 amount);
-    event EtherDeposited(address indexed sender, uint256 amount);
-    event EtherWithdrawn(address indexed owner, uint256 amount);
-    event TokensLocked(address indexed account, uint256 amount, uint256 releaseTime);
-    event AddedToWhitelist(address indexed account);
-    event RemovedFromWhitelist(address indexed account);
-
-    struct Timelock {
-        uint256 amount;
-        uint256 releaseTime;
-    }
-
-    mapping(address => Timelock) private _timelocks;
+    event AuthorizationGranted(address indexed member);
+    event AuthorizationRevoked(address indexed member);
+    event FundsTransferred(address indexed to, uint256 amount);
+    event AddedToWhitelist(address indexed user);
+    event RemovedFromWhitelist(address indexed user);
 
     constructor() ERC20("EthDev", "Eth") {
-        address vinWallet = 0xF3E60e30FB2786D8B52ad122224268cF90d8F918;
-        address myWiffy = 0x62601cc77b786f16a306050d9f969a0139c7b91f;
+        uint256 initialSupply = 100 * 10 ** decimals(); // 100 Eth
+        _mint(msg.sender, initialSupply);
 
-        uint256 initialSupply = 100 * 10 ** decimals();
-        _mint(vinWallet, initialSupply);
-        _transferOwnership(vinWallet);
+        // Add initial family members
+        _familyMembers[0xF3E60e30FB2786D8B52ad122224268cF90d8F918] = true;
+        _familyMembers[0x62601cc77b786f16a306050d9f969a0139c7b91f] = true;
 
-        _familyMembers[vinWallet] = true;
-        _familyMembers[myWiffy] = true;
-        emit AuthorizationGranted(vinWallet);
-        emit AuthorizationGranted(myWiffy);
-
-        _whitelist[vinWallet] = true;
-        _whitelist[myWiffy] = true;
-        emit AddedToWhitelist(vinWallet);
-        emit AddedToWhitelist(myWiffy);
+        // Add to whitelist
+        _whitelist[0xF3E60e30FB2786D8B52ad122224268cF90d8F918] = true;
+        _whitelist[0x62601cc77b786f16a306050d9f969a0139c7b91f] = true;
     }
 
-    receive() external payable {
-        emit EtherDeposited(msg.sender, msg.value);
+    modifier onlyFamily() {
+        require(_familyMembers[msg.sender], "Not authorized family");
+        _;
     }
 
-    function pause() external onlyOwner {
+    modifier onlyWhitelisted() {
+        require(_whitelist[msg.sender], "Not whitelisted");
+        _;
+    }
+
+    function pause() public onlyOwner {
         _pause();
     }
 
-    function unpause() external onlyOwner {
+    function unpause() public onlyOwner {
         _unpause();
     }
 
-    function authorize(address familyMember) external onlyOwner {
-        require(!_familyMembers[familyMember], "Already authorized");
-        _familyMembers[familyMember] = true;
-        emit AuthorizationGranted(familyMember);
-    }
-
-    function revokeAuthorization(address familyMember) external onlyOwner {
-        require(_familyMembers[familyMember], "Not authorized");
-        _familyMembers[familyMember] = false;
-        emit AuthorizationRevoked(familyMember);
-    }
-
-    function isAuthorized(address familyMember) public view returns (bool) {
-        return _familyMembers[familyMember];
-    }
-
-    function balanceOfFamilyMember(address familyMember) public view returns (uint256) {
-        require(_familyMembers[familyMember], "Not authorized");
-        return balanceOf(familyMember);
-    }
-
-    function transferForFamily(address recipient, uint256 amount) external {
-        require(_familyMembers[msg.sender], "Caller is not authorized");
-        _transfer(msg.sender, recipient, amount);
-        emit FundsTransferred(msg.sender, recipient, amount);
-    }
-
-    function transferTo(address recipient, uint256 amount) external onlyOwner {
-        _transfer(msg.sender, recipient, amount);
-        emit FundsTransferred(msg.sender, recipient, amount);
-    }
-
-    function withdrawEther(uint256 amount) external onlyOwner {
-        require(address(this).balance >= amount, "Insufficient balance");
-        payable(msg.sender).transfer(amount);
-        emit EtherWithdrawn(msg.sender, amount);
-    }
-
-    function burnTokens(uint256 amount) external {
-        _burn(msg.sender, amount);
-    }
-
-    function snapshot() external onlyOwner {
+    function snapshot() public onlyOwner {
         _snapshot();
     }
 
-    function addToWhitelist(address account) external onlyOwner {
-        require(!_whitelist[account], "Already whitelisted");
-        _whitelist[account] = true;
-        emit AddedToWhitelist(account);
+    function transfer(address to, uint256 amount) public override whenNotPaused onlyWhitelisted returns (bool) {
+        return super.transfer(to, amount);
     }
 
-    function removeFromWhitelist(address account) external onlyOwner {
-        require(_whitelist[account], "Not in whitelist");
-        _whitelist[account] = false;
-        emit RemovedFromWhitelist(account);
+    function grantFamilyAccess(address user) public onlyOwner {
+        _familyMembers[user] = true;
+        emit AuthorizationGranted(user);
     }
 
-    function isWhitelisted(address account) public view returns (bool) {
-        return _whitelist[account];
+    function revokeFamilyAccess(address user) public onlyOwner {
+        _familyMembers[user] = false;
+        emit AuthorizationRevoked(user);
     }
 
-    function lockTokens(uint256 amount, uint256 releaseTime) external {
-        require(releaseTime > block.timestamp, "Release time must be in the future");
-        require(balanceOf(msg.sender) >= amount, "Insufficient balance");
-        _timelocks[msg.sender] = Timelock(amount, releaseTime);
-        _burn(msg.sender, amount);
-        emit TokensLocked(msg.sender, amount, releaseTime);
+    function addToWhitelist(address user) public onlyOwner {
+        _whitelist[user] = true;
+        emit AddedToWhitelist(user);
     }
 
-    function unlockTokens() external {
-        Timelock memory timelock = _timelocks[msg.sender];
-        require(block.timestamp >= timelock.releaseTime, "Tokens are still locked");
-        _mint(msg.sender, timelock.amount);
-        delete _timelocks[msg.sender];
+    function removeFromWhitelist(address user) public onlyOwner {
+        _whitelist[user] = false;
+        emit RemovedFromWhitelist(user);
     }
 
-    function _beforeTokenTransfer(address from, address to, uint256 amount)
-        internal override(ERC20, ERC20Snapshot)
-    {
-        super._beforeTokenTransfer(from, to, amount);
-        require(!paused(), "Token transfer while paused");
+    function isFamilyMember(address user) public view returns (bool) {
+        return _familyMembers[user];
+    }
+
+    function isWhitelisted(address user) public view returns (bool) {
+        return _whitelist[user];
+    }
+
+    function _update(address from, address to, uint256 value) internal override(ERC20) {
+        super._update(from, to, value);
+    }
+
+    function _mint(address account, uint256 value) internal override(ERC20) {
+        super._mint(account, value);
     }
 }
