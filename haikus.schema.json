@@ -1,0 +1,64 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Haikus File Schema",
+    "description": "Schema for validating haikus in the haikus.json file",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "text": {
+                "type": "string",
+                "description": "The haiku text, consisting of three lines separated by newline characters",
+                "pattern": "^([^\\n]*\\n){2}[^\\n]*$",
+                "maxLength": 100
+            },
+            "image": {
+                "type": "string",
+                "description": "The filename of the image associated with the haiku",
+                "pattern": "^[^\\s]+\\.(jpg|jpeg|png|gif)$"
+            },
+            "author": {
+                "type": "string",
+                "description": "The name of the author of the haiku",
+                "default": "Anonymous"
+            },
+            "date_created": {
+                "type": "string",
+                "description": "The date when the haiku was created, in ISO 8601 format (YYYY-MM-DD)",
+                "format": "date"
+            },
+            "tags": {
+                "type": "array",
+                "description": "Tags or categories for the haiku",
+                "items": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_]+$"
+                },
+                "default": []
+            },
+            "alt_text": {
+                "type": "string",
+                "description": "Alternative text for the image, for accessibility",
+                "maxLength": 150
+            },
+            "version": {
+                "type": "string",
+                "description": "Schema version for tracking updates",
+                "default": "1.0.0"
+            }
+        },
+        "required": ["text", "image"],
+        "additionalProperties": false,
+        "examples": [
+            {
+                "text": "An old silent pond\nA frog jumps into the pond—\nSplash! Silence again.",
+                "image": "haiku1.jpg",
+                "author": "Matsuo Bashō",
+                "date_created": "2025-04-17",
+                "tags": ["nature", "pond"],
+                "alt_text": "A tranquil pond with ripples.",
+                "version": "1.0.0"
+            }
+        ]
+    }
+}
